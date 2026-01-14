@@ -2,7 +2,9 @@ const wrapper = document.querySelector(".wrapper"),
   inputPart = document.querySelector(".input-part"),
   infoTxt = inputPart.querySelector(".info-txt"),
   inputField = inputPart.querySelector("input"),
-  locationBtn = inputPart.querySelector("button"),
+  // UPDATED: Using specific classes to avoid confusion
+  locationBtn = inputPart.querySelector(".location-btn"),
+  searchBtn = inputPart.querySelector(".search-btn"), 
   weatherPart = wrapper.querySelector(".weather-part"),
   forecastSection = wrapper.querySelector(".forecast"),
   forecastDetails = forecastSection.querySelector(".forecast-details"),
@@ -22,7 +24,7 @@ function createWeatherChart(labels, data) {
   }
 
   weatherChart = new Chart(weatherChartCtx, {
-    type: "line", // Change chart type as needed (line, bar, etc.)
+    type: "line", 
     data: {
       labels: labels,
       datasets: [{
@@ -48,13 +50,25 @@ function createWeatherChart(labels, data) {
   });
 }
 
-// Event listeners
+// --- Event Listeners ---
+
+// 1. Enter Key Listener
 inputField.addEventListener("keyup", (e) => {
   if (e.key === "Enter" && inputField.value.trim() !== "") {
     requestApi(inputField.value.trim());
   }
 });
 
+// 2. NEW: Search Button Click Listener
+if (searchBtn) {
+    searchBtn.addEventListener("click", () => {
+        if (inputField.value.trim() !== "") {
+            requestApi(inputField.value.trim());
+        }
+    });
+}
+
+// 3. Location Button Click Listener
 locationBtn.addEventListener("click", () => {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(onSuccess, onError);
@@ -98,8 +112,10 @@ function fetchData() {
       } else {
         clearWeatherData(); // Clear previous weather and forecast data
         weatherDetails(result);
-        fetchForecast(result.coord.lat, result.coord.lon); // Fetch 7-day forecast
-        fetchHourlyForecast(result.coord.lat, result.coord.lon); // Fetch hourly forecast
+        if(result.coord) {
+            fetchForecast(result.coord.lat, result.coord.lon); // Fetch 7-day forecast
+            fetchHourlyForecast(result.coord.lat, result.coord.lon); // Fetch hourly forecast
+        }
       }
     })
     .catch(() => {
@@ -109,10 +125,10 @@ function fetchData() {
     });
 }
 
-
-
 // Function to display weather details
 function weatherDetails(info) {
+  if(!info || !info.weather) return;
+
   const { name: city, sys: { country }, weather: [{ description, id }], main: { temp, feels_like, humidity }, wind: { speed }, dt } = info;
   
   const weatherDate = new Date(dt * 1000).toLocaleString('en', {
@@ -147,21 +163,17 @@ function fetchForecast(latitude, longitude) {
   fetch(forecastApi)
     .then((res) => res.json())
     .then((data) => {
-      if (data.cod && data.cod === "404") {
-        infoTxt.innerText = "Forecast data not available";
-        infoTxt.classList.replace("pending", "error");
-        clearForecast();
+      if (data.daily) {
+         updateForecast(data.daily.slice(1, 8)); // Update forecast for next 7 days
       } else {
-        updateForecast(data.daily.slice(1, 8)); // Update forecast for next 7 days
+        // Fallback or error if 'daily' is missing (happens on free plan sometimes)
+        console.log("Daily forecast data not available");
       }
     })
-    .catch(() => {
-      infoTxt.innerText = "Forecast data not available";
-      infoTxt.classList.replace("pending", "error");
-      clearForecast();
+    .catch((err) => {
+      console.log("Forecast Error", err);
     });
 }
-
 
 // Function to fetch hourly forecast data
 function fetchHourlyForecast(latitude, longitude) {
@@ -170,24 +182,20 @@ function fetchHourlyForecast(latitude, longitude) {
   fetch(hourlyForecastApi)
     .then((res) => res.json())
     .then((data) => {
-      if (data.cod && data.cod === "404") {
-        infoTxt.innerText = "Hourly forecast data not available";
-        infoTxt.classList.replace("pending", "error");
-        clearHourlyForecast();
-      } else {
+      if (data.hourly) {
         updateHourlyForecast(data.hourly.slice(0, 24)); // Update hourly forecast for next 24 hours
+      } else {
+        console.log("Hourly forecast data not available");
       }
     })
-    .catch(() => {
-      infoTxt.innerText = "Hourly forecast data not available";
-      infoTxt.classList.replace("pending", "error");
-      clearHourlyForecast();
+    .catch((err) => {
+      console.log("Hourly Forecast Error", err);
     });
 }
 
 // Function to update daily forecast
 function updateForecast(dailyData) {
-  forecastDetails.innerHTML = ""; // Clear previous forecast details
+  forecastDetails.innerHTML = ""; 
 
   dailyData.forEach((day) => {
     const { dt, weather: [{ description, id }], temp: { max, min } } = day;
@@ -220,7 +228,7 @@ function updateHourlyForecast(hourlyData) {
     data.push(temp);
   });
 
-  createWeatherChart(labels, data); // Create or update hourly weather chart
+  createWeatherChart(labels, data); 
 }
 
 // Function to clear weather data
@@ -234,18 +242,15 @@ function clearWeatherData() {
   weatherPart.querySelector(".wind span").innerText = "";
   weatherPart.querySelector(".date-time").innerText = "";
   infoTxt.innerText = "";
-  forecastSection.style.display = "block"; // Ensure forecast section is visible
-  clearForecast(); // Clear previous forecast data
-  clearHourlyForecast(); // Clear previous hourly forecast data
+  forecastSection.style.display = "block"; 
+  clearForecast(); 
+  clearHourlyForecast(); 
 }
 
-
-// Function to clear forecast data
 function clearForecast() {
-  forecastDetails.innerHTML = ""; // Clear daily forecast details
+  forecastDetails.innerHTML = ""; 
 }
 
-// Function to clear hourly forecast data
 function clearHourlyForecast() {
   if (weatherChart) {
     weatherChart.destroy();
@@ -272,10 +277,12 @@ function getWeatherIcon(weatherId) {
 }
 
 // Event listener for back button
-arrowBack.addEventListener("click", () => {
-  wrapper.classList.remove("active");
-  clearWeatherData();
-});
+if(arrowBack){
+    arrowBack.addEventListener("click", () => {
+      wrapper.classList.remove("active");
+      clearWeatherData();
+    });
+}
 
 // Change Color Theme
 var isDark = false;
@@ -293,10 +300,12 @@ const colors = [
 const colorBtns = document.querySelectorAll(".theme-color");
 const darkModeBtn = document.querySelector(".dark-mode-btn");
 
-darkModeBtn.addEventListener("click", () => {
-  isDark = !isDark;
-  changeTheme(isDark ? "#000" : colors[3]);
-});
+if(darkModeBtn){
+    darkModeBtn.addEventListener("click", () => {
+      isDark = !isDark;
+      changeTheme(isDark ? "#000" : colors[3]);
+    });
+}
 
 colorBtns.forEach((btn, index) => {
   btn.style.backgroundColor = colors[index];
@@ -321,4 +330,4 @@ function getTheme() {
   }
 }
 
-getTheme(); // Initialize theme on page load
+getTheme();
